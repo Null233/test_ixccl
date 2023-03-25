@@ -13,14 +13,15 @@ int main(int argc, char *argv[])
     if (rank == 0)
         printf("IXCCL_BUTTERFLY\n");
 
-    ncclUniqueId id;
-    ncclComm_t comm;
+    // initializing data buffer on device
     cudaStream_t s;
     CUDACHECK(cudaStreamCreate(&s));
     float **sendbuff, *recvbuff;
     sendbuff = (float **)malloc(DATA_NUM * sizeof(float *));
 
     // get NCCL unique ID at rank 0 and broadcast it to all others
+    ncclUniqueId id;
+    ncclComm_t comm;
     if (rank == 0)
         ncclGetUniqueId(&id);
     MPICHECK(MPI_Bcast((void *)&id, sizeof(id), MPI_BYTE, 0, MPI_COMM_WORLD));

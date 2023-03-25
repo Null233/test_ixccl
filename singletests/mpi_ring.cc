@@ -14,7 +14,7 @@ int main(int argc, char **argv)
     vector<float> data(count, rank);
     
     float *tmp = (float *)malloc(count * sizeof(float));
-    mpiRing(&data[0], tmp, count, rank, size, MPI_COMM_WORLD);
+    mpiRing(&data[0], tmp, count, rank, size, MPI_FLOAT, MPI_COMM_WORLD);
     if(rank == 0){
         for(int i = 0; i < count; i++)
             printf("%3d ", int(data[i]));

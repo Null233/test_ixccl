@@ -139,12 +139,14 @@ int main(int argc, char *argv[])
                     double begin, end, avg = 0;
                     for (int run = 0; run < RUN_ROUND; run++) {
                         begin = double(clock());
+
                         ncclGroupStart();
                         NCCLCHECK(ncclSend(sendbuff[run % DATA_NUM], data_sizes[size_i], ncclFloat,
                                            peer, comms[node_i][node_j].nccl_comm, s));
                         NCCLCHECK(ncclRecv(recvbuff, data_sizes[size_i], ncclFloat, peer,
                                            comms[node_i][node_j].nccl_comm, s));
                         ncclGroupEnd();
+                        
                         CUDACHECK(cudaStreamSynchronize(s));
                         end = double(clock());
                         avg += (end - begin) / RUN_ROUND;

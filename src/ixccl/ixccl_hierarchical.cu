@@ -11,6 +11,11 @@ int main(int argc, char *argv[])
     getLocalRank(rank, size, &localRank);
 
     // initializing COMM_LOCAL and COMM_WORLD_MAIN
+    /**
+     * We need to use MPI communicators to construct NCCL communicators
+     * After the construction of local and inter-node communicators,
+     * check if rank in local communicator is the same with localRank
+     */
     MPI_Comm COMM_LOCAL;
     MPI_Comm COMM_WORLD_MAIN;
     split_world(rank, localRank, &COMM_LOCAL, &COMM_WORLD_MAIN);
@@ -20,6 +25,9 @@ int main(int argc, char *argv[])
     MPICHECK(MPI_Comm_size(COMM_LOCAL, &localSize));
     if (mlocalRank != localRank)
         printf("!!!!!!  localRank != mpi_localRank  !!!!!!");
+    /**
+     * COMM_WORLD_MAIN as a inter-node communicator is only used if localRank == 0
+     */
     if (localRank == 0)
         MPICHECK(MPI_Comm_rank(COMM_WORLD_MAIN, &worldMainRank));
     if (localRank == 0)
@@ -36,6 +44,11 @@ int main(int argc, char *argv[])
 
     // get NCCL unique ID at rank 0 and broadcast it to all others
     ncclUniqueId id_local, id_main;
+    /**
+     * allocate unique id if localRank == 0 and be broadcasted to all local ranks
+     * every node has a duplicate nccl communicator comm_local
+     * only main local ranks (localRank = 0) have comm_world_main
+     */
     if (localRank == 0)
         ncclGetUniqueId(&id_local);
     MPICHECK(MPI_Bcast((void *)&id_local, sizeof(id_local), MPI_BYTE, 0, COMM_LOCAL));
@@ -79,7 +92,8 @@ int main(int argc, char *argv[])
 
     // finalizing NCCL
     ncclCommDestroy(comm_local);
-    ncclCommDestroy(comm_world_main);
+    if (localRank == 0)
+        ncclCommDestroy(comm_world_main);
 
     // finalizing MPI
     MPICHECK(MPI_Finalize());

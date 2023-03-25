@@ -15,7 +15,7 @@ int main(int argc, char **argv)
         data[i] = rank + 10;
     }
 
-    mpiPipelineBtreeBcast(&data[0], data.size(), rank, size, MPI_COMM_WORLD);
+    mpiPipelineBtreeBcast(&data[0], data.size(), rank, size, MPI_FLOAT, MPI_COMM_WORLD);
 
     printf("Rank: %3d\t", rank);
     for (int i = 0; i < size; i++) {

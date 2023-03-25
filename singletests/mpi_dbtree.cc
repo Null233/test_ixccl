@@ -12,7 +12,7 @@ int main(int argc, char **argv)
 
     vector<float> data(size, rank);
 
-    mpiDBtreeReduction(&data[0], data.size(), rank, size, MPI_COMM_WORLD);
+    mpiDBtreeReduction(&data[0], data.size(), rank, size, MPI_FLOAT, MPI_COMM_WORLD);
 
     printf("Rank: %3d\t", rank);
     for (int i = 0; i < size; i++) {
