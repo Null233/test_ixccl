@@ -14,9 +14,9 @@
 #define DATA_SIZE 64 /* 262144 = 1MB    256 = 1KB*/
 #define RUN_ROUND 1000
 /* 1: MPI_ALLREDUCE; 2: mpiRing; 3: mpiButterfly; 4: mpiTreeReduction; else: MPI_REDUCE */
-#define LOCAL_REDUCE_ALGO 4
+#define LOCAL_REDUCE_ALGO 0
 /* 1: mpiBtreeBcast; 2: mpiPipelineBtreeBcast; else MPI_BCAST */
-#define LOCAL_BCAST_ALGO 2
+#define LOCAL_BCAST_ALGO 0
 #define DATA_NUM 50
 
 using namespace std;
@@ -235,7 +235,7 @@ void mpiRing(void *sendbuff, void *recvData, int count, int rank, int size, MPI_
 
     int sendTo = (rank + 1) % size;
     int recvFrom = (rank - 1 + size) % size;
-    int count_in_ring = count / size + 1;
+    int count_in_ring = count / size;
 
     // Reduce-Scatter
     for (int i = 0; i < size - 1; i++) {

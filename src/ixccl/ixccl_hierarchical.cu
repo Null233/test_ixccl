@@ -35,6 +35,28 @@ int main(int argc, char *argv[])
     if (rank == 0)
         printf("IXCCL_HIERARCHICAL\n");
 
+    if (rank == 0) {
+#if LOCAL_IXCCL_REDUCE_ALGO == 1
+        printf("LOCAL_IXCCL_ALLREDUCE\n");
+#elif LOCAL_IXCCL_REDUCE_ALGO == 2
+        printf("LOCAL_IXCCL_RING\n");
+#elif LOCAL_IXCCL_REDUCE_ALGO == 3
+        printf("LOCAL_IXCCL_BUTTERFLY\n");
+#elif LOCAL_IXCCL_REDUCE_ALGO == 4
+        printf("LOCAL_IXCCL_TREE_REDUCTION\n");
+#else
+        printf("LOCAL_IXCCL_REDUCE\n");
+#endif
+
+#if LOCAL_IXCCL_BCAST_ALGO == 1
+        printf("LOCAL_IXCCL_BTREE_BROADCAST\n");
+#elif LOCAL_IXCCL_BCAST_ALGO == 2
+        printf("LOCAL_IXCCL_PIPELINE_BTREE_BROADCAST\n");
+#else
+        printf("LOCAL_IXCCL_BROADCAST\n");
+#endif
+    }
+
     // initializing device buffer and stream
     CUDACHECK(cudaSetDevice(localRank));
     cudaStream_t s;
