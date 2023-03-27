@@ -52,10 +52,10 @@ ncclResult_t ixcclHierarchical(void *, void *, size_t, ncclDataType_t, ncclRedOp
     do {                                                                                           \
         double begin, end;                                                                         \
         for (int i = 0; i < RUN_ROUND; i++) {                                                      \
-            begin = double(clock());                                                               \
+            begin = MPI_Wtime();                                                                   \
             cmd;                                                                                   \
             CUDACHECK(cudaStreamSynchronize(s));                                                   \
-            end = double(clock());                                                                 \
+            end = MPI_Wtime();                                                                     \
             avg += (end - begin) / RUN_ROUND;                                                      \
         }                                                                                          \
     } while (0)

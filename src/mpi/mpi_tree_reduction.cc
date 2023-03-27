@@ -21,8 +21,7 @@ int main(int argc, char **argv)
         PERF_COUNTER(mpiTreeReduction(&datas[i % DATA_NUM][0], tmp, data_sizes[size_i], rank, size,
                                       MPI_FLOAT, MPI_COMM_WORLD));
         if (rank == 0)
-            printf("DATA SIZE: %-10d takes %.3lfms\n", data_sizes[size_i],
-                   double(avg) / CLOCKS_PER_SEC * 1000);
+            printf("DATA SIZE: %-10d takes %.3lfms\n", data_sizes[size_i], double(avg) * 1000);
         free(tmp);
     }
 

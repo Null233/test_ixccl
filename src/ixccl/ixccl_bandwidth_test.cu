@@ -138,7 +138,7 @@ int main(int argc, char *argv[])
 
                     double begin, end, avg = 0;
                     for (int run = 0; run < RUN_ROUND; run++) {
-                        begin = double(clock());
+                        begin = MPI_Wtime();
 
                         ncclGroupStart();
                         NCCLCHECK(ncclSend(sendbuff[run % DATA_NUM], data_sizes[size_i], ncclFloat,
@@ -146,9 +146,9 @@ int main(int argc, char *argv[])
                         NCCLCHECK(ncclRecv(recvbuff, data_sizes[size_i], ncclFloat, peer,
                                            comms[node_i][node_j].nccl_comm, s));
                         ncclGroupEnd();
-                        
+
                         CUDACHECK(cudaStreamSynchronize(s));
-                        end = double(clock());
+                        end = MPI_Wtime();
                         avg += (end - begin) / RUN_ROUND;
                     }
 
@@ -156,7 +156,7 @@ int main(int argc, char *argv[])
                         printf("Rank %d with %d:\n", node_i, node_j);
                     if (node_i == rank)
                         printf("DATA SIZE: %-10d takes %.3lfms\n", data_sizes[size_i],
-                               double(avg) / CLOCKS_PER_SEC * 1000);
+                               double(avg) * 1000);
                 }
                 usleep(1000000);
             }
@@ -190,7 +190,7 @@ int main(int argc, char *argv[])
                         printf("Rank %d with %d:\n", node_i, node_j);
                     if (node_i == rank)
                         printf("DATA SIZE: %-10d takes %.3lfms\n", data_sizes[size_i],
-                               double(avg) / CLOCKS_PER_SEC * 1000);
+                               double(avg) * 1000);
                 }
                 usleep(1000000);
             }

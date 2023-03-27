@@ -74,32 +74,11 @@ run: run_allreduce run_ring run_butterfly run_hierarchical run_tree_reduction
 
 run_ixccl: run_ixccl_allreduce run_ixccl_ring run_ixccl_hierarchical run_ixccl_butterfly
 
-run_ring :
-	$(MPIEXEC) -np $(NP) -H $(HOST) $(BUILDDIR)/mpi_ring.out
+run_% : $(BUILDDIR)/mpi_%.out
+	scp $< $(USER)@$(PEER1):$(BUILDDIR)/
+	$(MPIEXEC) -np $(NP) -H $(HOST) $<
 
-run_butterfly:
-	$(MPIEXEC) -np $(NP) -H $(HOST) $(BUILDDIR)/mpi_butterfly.out
+run_ixccl_% : $(BUILDDIR)/ixccl_%.out
+	scp $< $(USER)@$(PEER1):$(PWD)/
+	$(MPIEXEC) -np $(CUNP) -H $(CUHOST) $<
 
-run_allreduce:
-	$(MPIEXEC) -np $(NP) -H $(HOST) $(BUILDDIR)/mpi_allreduce.out
-
-run_hierarchical:
-	$(MPIEXEC) -np $(NP) -H $(HOST) $(BUILDDIR)/mpi_hierarchical.out
-
-run_tree_reduction:
-	$(MPIEXEC) -np $(NP) -H $(HOST) $(BUILDDIR)/mpi_tree_reduction.out
-
-run_ixccl_allreduce:
-	$(MPIEXEC) -np $(CUNP) -H $(CUHOST) $(BUILDDIR)/ixccl_allreduce.out
-
-run_ixccl_ring:
-	$(MPIEXEC) -np $(CUNP) -H $(CUHOST) $(BUILDDIR)/ixccl_ring.out
-
-run_ixccl_butterfly:
-	$(MPIEXEC) -np $(CUNP) -H $(CUHOST) $(BUILDDIR)/ixccl_butterfly.out
-
-run_ixccl_hierarchical:
-	$(MPIEXEC) -np $(CUNP) -H $(CUHOST) $(BUILDDIR)/ixccl_hierarchical.out
-
-run_ixccl_bandwidth:
-	$(MPIEXEC) -np $(CUNP) -H $(CUHOST) $(BUILDDIR)/ixccl_bandwidth_test.out

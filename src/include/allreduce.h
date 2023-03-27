@@ -64,9 +64,9 @@ vector<int> data_sizes = data_sizes_resnet50;
     do {                                                                                           \
         double begin, end;                                                                         \
         for (int i = 0; i < RUN_ROUND; i++) {                                                      \
-            begin = double(clock());                                                               \
+            begin = MPI_Wtime();                                                                   \
             cmd;                                                                                   \
-            end = double(clock());                                                                 \
+            end = MPI_Wtime();                                                                     \
             avg += (end - begin) / RUN_ROUND;                                                      \
         }                                                                                          \
     } while (0)
