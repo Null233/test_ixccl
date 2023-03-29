@@ -39,15 +39,8 @@ int main(int argc, char *argv[])
     NCCLCHECK(ncclCommInitRank(&comm, size, id, rank));
 
     // start testing
-
-    for (int s_i = 0; s_i < nStream; s_i++) {
-        int peer = size - 1 - rank;
-        void *sendbase = GET_BASE(float, sendbuff, s_i, (dataSize / nStream));
-
-        ncclGroupStart();
-        NCCLCHECK(ncclSend(sendbase, (dataSize / nStream), ncclFloat, peer, comm, s[s_i]));
-        NCCLCHECK(ncclRecv(recvbuff, (dataSize / nStream), ncclFloat, peer, comm, s[s_i]));
-        ncclGroupEnd();
+    for(int run = 0; run < 1000; run++){
+        ixcclMultiStreamRing(sendbuff, recvbuff, dataSize, rank, size, ncclFloat, comm, nStream, s);
     }
 
     for (int i = 0; i < nStream; i++) {

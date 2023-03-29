@@ -114,7 +114,7 @@ ncclResult_t ixcclRing(const void *sendbuff, void *recvtmp, size_t count, int ra
         ncclGroupEnd();
 
         // Sum
-        sum<<<count_in_ring, size, 0, stream>>>((float *)recvBase, (float *)recvtmp, count_in_ring);
+        sum<<<(count_in_ring + 1023)/1024, 1024, 0, stream>>>((float *)recvBase, (float *)recvtmp, count_in_ring);
     }
 
     // All-Gather
@@ -128,7 +128,7 @@ ncclResult_t ixcclRing(const void *sendbuff, void *recvtmp, size_t count, int ra
         ncclGroupEnd();
 
         // assign
-        assign<<<count_in_ring, size, 0, stream>>>((float *)recvBase, (float *)recvtmp,
+        assign<<<(count_in_ring + 1023)/1024, 1024, 0, stream>>>((float *)recvBase, (float *)recvtmp,
                                                    count_in_ring);
     }
 
