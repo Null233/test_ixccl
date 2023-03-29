@@ -81,7 +81,7 @@ vector<int> data_sizes_all =
      2048000, 2097152, 2359296, 2457600, 4096000, 16777216, 102760448};
 
 vector<int>
-    data_sizes = data_sizes_vgg16;
+    data_sizes = data_sizes_all;
 
 #define PRINT(pr_cmd)                                                                              \
     do {                                                                                           \
