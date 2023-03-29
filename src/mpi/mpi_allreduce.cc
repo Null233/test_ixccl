@@ -22,7 +22,7 @@ int main(int argc, char **argv)
         PERF_COUNTER(mpiAllreduce(&datas[i % DATA_NUM][0], data_sizes[size_i], MPI_FLOAT, MPI_SUM,
                                   MPI_COMM_WORLD));
         if (rank == 0)
-            printf("DATA SIZE: %-10d takes %.3lfms\n", data_sizes[size_i], double(avg) * 1000);
+            printf("DATA SIZE: %-10d takes %.3lfms\n", data_sizes[size_i], avg  / CLOCKS_PER_SEC * 1000);
         avg = 0;
     }
 

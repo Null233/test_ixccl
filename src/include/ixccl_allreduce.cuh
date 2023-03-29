@@ -52,10 +52,10 @@ ncclResult_t ixcclHierarchical(void *, void *, size_t, ncclDataType_t, ncclRedOp
     do {                                                                                           \
         double begin, end;                                                                         \
         for (int i = 0; i < RUN_ROUND; i++) {                                                      \
-            begin = MPI_Wtime();                                                                   \
+            begin = double(clock());                                                                   \
             cmd;                                                                                   \
             CUDACHECK(cudaStreamSynchronize(s));                                                   \
-            end = MPI_Wtime();                                                                     \
+            end = double(clock());                                                                     \
             avg += (end - begin) / RUN_ROUND;                                                      \
         }                                                                                          \
     } while (0)
@@ -130,6 +130,18 @@ ncclResult_t ixcclRing(const void *sendbuff, void *recvtmp, size_t count, int ra
         // assign
         assign<<<count_in_ring, size, 0, stream>>>((float *)recvBase, (float *)recvtmp,
                                                    count_in_ring);
+    }
+
+    return ncclSuccess;
+}
+
+ncclResult_t ixcclMultiStreamRing(const void *sendbuff, void *recvtmp, size_t count, int rank, int size,
+                       ncclDataType_t dtype, ncclComm_t comm, int nStream, cudaStream_t* streams)
+{
+
+    for(int i = 0; i < nStream; i++){
+        void *sendBase = GET_BASE(float, sendbuff, i, count / nStream);
+        ixcclRing(sendBase, recvtmp, count / nStream, rank, size, dtype, comm, streams[i]);
     }
 
     return ncclSuccess;

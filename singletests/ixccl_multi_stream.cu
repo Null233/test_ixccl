@@ -4,6 +4,8 @@ int main(int argc, char *argv[])
 {
     int rank, size, localRank;
 
+    int dataSize = 102760448;
+
     // initializing MPI
     MPICHECK(MPI_Init(&argc, &argv));
     MPICHECK(MPI_Comm_rank(MPI_COMM_WORLD, &rank));
@@ -14,13 +16,17 @@ int main(int argc, char *argv[])
     printf("Hostname: %s, Rank: %d, localRank: %d, Size: %d\n", hostname, rank, localRank, size);
     CUDACHECK(cudaSetDevice(localRank));
     if (rank == 0)
-        printf("IXCCL_ALLREDUCE\n");
+        printf("IXCCL_MULTIPLE_STREAMS_TEST\n");
 
     // initializing data buffer on device
-    cudaStream_t s;
-    CUDACHECK(cudaStreamCreate(&s));
-    float **sendbuff, *recvbuff;
-    sendbuff = (float **)malloc(DATA_NUM * sizeof(float *));
+    int nStream = size;
+    cudaStream_t s[nStream];
+    for (int i = 0; i < nStream; i++) {
+        CUDACHECK(cudaStreamCreate(&s[i]));
+    }
+    float *sendbuff, *recvbuff;
+    CUDACHECK(cudaMalloc(&sendbuff, dataSize * sizeof(float)));
+    CUDACHECK(cudaMalloc(&recvbuff, dataSize * sizeof(float)));
 
     // get NCCL unique ID at rank 0 and broadcast it to all others
     ncclUniqueId id;
@@ -33,26 +39,25 @@ int main(int argc, char *argv[])
     NCCLCHECK(ncclCommInitRank(&comm, size, id, rank));
 
     // start testing
-    for (int size_i = 0; size_i < data_sizes.size(); size_i++) {
-        // Preparing data
-        for (int j = 0; j < DATA_NUM; j++) {
-            CUDACHECK(cudaMalloc(&sendbuff[j], data_sizes[size_i] * sizeof(float)));
-            CUDACHECK(cudaMalloc(&recvbuff, data_sizes[size_i] * sizeof(float)));
-            CUDACHECK(cudaMemcpy(sendbuff[j], &vector<float>(data_sizes[size_i], rand())[0],
-                                 data_sizes[size_i], cudaMemcpyHostToDevice));
-        }
+    ncclGroupStart();
 
-        double avg = 0;
-        IXCCL_PERF_COUNTER(NCCLCHECK(ixcclAllreduce(
-            sendbuff[i % DATA_NUM], recvbuff, data_sizes[size_i], ncclFloat, ncclSum, comm, s)));
+    for (int s_i = 0; s_i < nStream; s_i++) {
+        int peer = size - 1 - rank;
+        void *sendbase = GET_BASE(float, sendbuff, s_i, (dataSize / nStream));
+        NCCLCHECK(ncclSend(sendbase, (dataSize / nStream), ncclFloat, peer,
+                           comm, s[s_i]));
+        NCCLCHECK(ncclRecv(recvbuff, (dataSize / nStream), ncclFloat, peer,
+                           comm, s[s_i]));
+    }
 
-        PRINT(printf("DATA SIZE: %-10d takes %.3lfms\n", data_sizes[size_i], avg  / CLOCKS_PER_SEC * 1000));
+    ncclGroupEnd();
+
+    for (int i = 0; i < nStream; i++) {
+        CUDACHECK(cudaStreamSynchronize(s[i]));
     }
 
     // free device buffers
-    for (int j = 0; j < DATA_NUM; j++) {
-        CUDACHECK(cudaFree(sendbuff[j]));
-    }
+    CUDACHECK(cudaFree(sendbuff));
     CUDACHECK(cudaFree(recvbuff));
 
     // finalizing NCCL

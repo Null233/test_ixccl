@@ -9,16 +9,16 @@ int main(int argc, char *argv[])
     MPICHECK(MPI_Comm_rank(MPI_COMM_WORLD, &rank));
     MPICHECK(MPI_Comm_size(MPI_COMM_WORLD, &size));
     getLocalRank(rank, size, &localRank);
-    char hostname[1024];
-    getHostName(hostname, 1024);
-    printf("Hostname: %s, Rank: %d, localRank: %d, Size: %d\n", hostname, rank, localRank, size);
     CUDACHECK(cudaSetDevice(localRank));
     if (rank == 0)
-        printf("IXCCL_ALLREDUCE\n");
+        printf("IXCCL_RING\n");
 
     // initializing data buffer on device
-    cudaStream_t s;
-    CUDACHECK(cudaStreamCreate(&s));
+    int nStream = size;
+    cudaStream_t s[nStream];
+    for (int i = 0; i < nStream; i++) {
+        CUDACHECK(cudaStreamCreate(&s[i]));
+    }
     float **sendbuff, *recvbuff;
     sendbuff = (float **)malloc(DATA_NUM * sizeof(float *));
 
@@ -32,7 +32,6 @@ int main(int argc, char *argv[])
     // initializing NCCL
     NCCLCHECK(ncclCommInitRank(&comm, size, id, rank));
 
-    // start testing
     for (int size_i = 0; size_i < data_sizes.size(); size_i++) {
         // Preparing data
         for (int j = 0; j < DATA_NUM; j++) {
@@ -42,11 +41,20 @@ int main(int argc, char *argv[])
                                  data_sizes[size_i], cudaMemcpyHostToDevice));
         }
 
-        double avg = 0;
-        IXCCL_PERF_COUNTER(NCCLCHECK(ixcclAllreduce(
-            sendbuff[i % DATA_NUM], recvbuff, data_sizes[size_i], ncclFloat, ncclSum, comm, s)));
+        double begin, end, avg = 0;
+        for (int i = 0; i < RUN_ROUND; i++) {
+            begin = double(clock());
+            NCCLCHECK(ixcclMultiStreamRing(sendbuff[i % DATA_NUM], recvbuff, data_sizes[size_i],
+                                           rank, size, ncclFloat, comm, nStream, s));
+            for (int s_i = 0; s_i < nStream; s_i++) {
+                CUDACHECK(cudaStreamSynchronize(s[s_i]));
+            }
+            end = double(clock());
+            avg += (end - begin) / RUN_ROUND;
+        }
 
-        PRINT(printf("DATA SIZE: %-10d takes %.3lfms\n", data_sizes[size_i], avg  / CLOCKS_PER_SEC * 1000));
+        PRINT(printf("DATA SIZE: %-10d takes %.3lfms\n", data_sizes[size_i],
+                     avg / CLOCKS_PER_SEC * 1000));
     }
 
     // free device buffers

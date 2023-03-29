@@ -23,7 +23,7 @@ CUHOST	:= localhost:$(CUNPLOCAL),$(PEER1):$(CUNPLOCAL)
 
 
 CXXFLAGS	:= -O3 -Isrc/include -Wno-format
-CUFLAGS		:= -O3 -Isrc/include -Wno-format -DTEST_SR -DBROADCAST_FROM_0
+CUFLAGS		:= -O3 -Isrc/include -Wno-format -DTEST_SR -DBROADCAST_FROM_0 
 LDFLAGS		:= -lmpi -L/usr/local/lib
 CULDFLAGS	:= -L/usr/local/lib -lmpi -lcuda -lcudart -lnccl
 
@@ -33,7 +33,7 @@ BUILDDIR	:= $(abspath build)
 SRC		:= src/mpi/mpi_ring.cc src/mpi/mpi_butterfly.cc src/mpi/mpi_allreduce.cc src/mpi/mpi_hierarchical.cc
 SRC		+= src/mpi/mpi_tree_reduction.cc
 CUSRC	:= src/ixccl/ixccl_ring.cu src/ixccl/ixccl_allreduce.cu src/ixccl/ixccl_butterfly.cu src/ixccl/ixccl_hierarchical.cu
-CUSRC	+= src/ixccl/ixccl_bandwidth_test.cu
+CUSRC	+= src/ixccl/ixccl_bandwidth_test.cu src/ixccl/ixccl_multi_stream_ring.cu
 OBJ		:= $(patsubst src/mpi/%.cc, $(BUILDDIR)/ccobj/%.o, $(SRC))
 CUOBJ	:= $(patsubst src/ixccl/%.cu, $(BUILDDIR)/cuobj/%.o, $(CUSRC))
 OUT		:= $(patsubst $(BUILDDIR)/ccobj/%.o, $(BUILDDIR)/%.out, $(OBJ))
@@ -79,6 +79,6 @@ run_% : $(BUILDDIR)/mpi_%.out
 	$(MPIEXEC) -np $(NP) -H $(HOST) $<
 
 run_ixccl_% : $(BUILDDIR)/ixccl_%.out
-	scp $< $(USER)@$(PEER1):$(PWD)/
+	scp $< $(USER)@$(PEER1):$(BUILDDIR)/
 	$(MPIEXEC) -np $(CUNP) -H $(CUHOST) $<
 

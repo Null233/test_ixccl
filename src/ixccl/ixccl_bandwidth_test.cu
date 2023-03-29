@@ -90,8 +90,13 @@ int main(int argc, char *argv[])
         printf("IXCCL_BANDWIDTH_TEST\n");
 
     // initializing data buffer on device
-    cudaStream_t s;
-    CUDACHECK(cudaStreamCreate(&s));
+    int nStream = size;
+    cudaStream_t s[nStream];
+
+    for (int i = 0; i < nStream; i++) {
+        CUDACHECK(cudaStreamCreate(&s[i]));
+    }
+
     float **sendbuff, *recvbuff;
     sendbuff = (float **)malloc(DATA_NUM * sizeof(float *));
 
@@ -117,6 +122,12 @@ int main(int argc, char *argv[])
     vector<vector<MPINCCL_COMM>> comms(size, vector<MPINCCL_COMM>(size));
     ConstructComms(rank, size, comms);
 
+#ifdef APPLY_MULTIPLE_STREAM
+    printf("APPLYED MULTIPLE STREAMS\n");
+#else
+    printf("ONLY ONE STREAM\n");
+#endif
+
     // start testing
     MPI_Barrier(MPI_COMM_WORLD);
 #ifdef TEST_SR
@@ -138,17 +149,30 @@ int main(int argc, char *argv[])
 
                     double begin, end, avg = 0;
                     for (int run = 0; run < RUN_ROUND; run++) {
-                        begin = MPI_Wtime();
-
+                        begin = double(clock());
+#ifdef APPLY_MULTIPLE_STREAM
+                        for (int s_i = 0; s_i < nStream; s_i++) {
+                            ncclGroupStart();
+                            void *sendbase = GET_BASE(float, sendbuff[run % DATA_NUM], s_i,
+                                                      (data_sizes[size_i] / nStream));
+                            NCCLCHECK(ncclSend(sendbase, (data_sizes[size_i] / nStream), ncclFloat,
+                                               peer, comms[node_i][node_j].nccl_comm, s[s_i]));
+                            NCCLCHECK(ncclRecv(recvbuff, (data_sizes[size_i] / nStream), ncclFloat,
+                                               peer, comms[node_i][node_j].nccl_comm, s[s_i]));
+                            ncclGroupEnd();
+                        }
+#else
                         ncclGroupStart();
                         NCCLCHECK(ncclSend(sendbuff[run % DATA_NUM], data_sizes[size_i], ncclFloat,
-                                           peer, comms[node_i][node_j].nccl_comm, s));
+                                           peer, comms[node_i][node_j].nccl_comm, s[0]));
                         NCCLCHECK(ncclRecv(recvbuff, data_sizes[size_i], ncclFloat, peer,
-                                           comms[node_i][node_j].nccl_comm, s));
+                                           comms[node_i][node_j].nccl_comm, s[0]));
                         ncclGroupEnd();
-
-                        CUDACHECK(cudaStreamSynchronize(s));
-                        end = MPI_Wtime();
+#endif
+                        for (int i = 0; i < nStream; i++) {
+                            CUDACHECK(cudaStreamSynchronize(s[i]));
+                        }
+                        end = double(clock());
                         avg += (end - begin) / RUN_ROUND;
                     }
 
@@ -156,7 +180,7 @@ int main(int argc, char *argv[])
                         printf("Rank %d with %d:\n", node_i, node_j);
                     if (node_i == rank)
                         printf("DATA SIZE: %-10d takes %.3lfms\n", data_sizes[size_i],
-                               double(avg) * 1000);
+                               avg / CLOCKS_PER_SEC * 1000);
                 }
                 usleep(1000000);
             }
@@ -185,12 +209,12 @@ int main(int argc, char *argv[])
                     double avg = 0;
                     IXCCL_PERF_COUNTER(NCCLCHECK(
                         ixcclAllreduce(sendbuff[i % DATA_NUM], recvbuff, data_sizes[size_i],
-                                       ncclFloat, ncclSum, comms[node_i][node_j].nccl_comm, s)));
+                                       ncclFloat, ncclSum, comms[node_i][node_j].nccl_comm, s[0])));
                     if (node_i == rank)
                         printf("Rank %d with %d:\n", node_i, node_j);
                     if (node_i == rank)
                         printf("DATA SIZE: %-10d takes %.3lfms\n", data_sizes[size_i],
-                               double(avg) * 1000);
+                               avg / CLOCKS_PER_SEC * 1000);
                 }
                 usleep(1000000);
             }

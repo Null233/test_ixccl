@@ -102,7 +102,12 @@ int main(int argc, char *argv[])
             ixcclHierarchical(sendbuff[i % DATA_NUM], recvbuff, data_sizes[size_i], ncclFloat,
                               ncclSum, comm_local, comm_world_main, s, COMM_LOCAL)));
 
-        PRINT(printf("DATA SIZE: %-10d takes %.3lfms\n", data_sizes[size_i], double(avg) * 1000));
+        PRINT(printf("DATA SIZE: %-10d takes %.3lfms\n", data_sizes[size_i],
+                     double(avg) / CLOCKS_PER_SEC * 1000));
+        for (int j = 0; j < DATA_NUM; j++) {
+            CUDACHECK(cudaFree(sendbuff[j]));
+        }
+        CUDACHECK(cudaFree(recvbuff));
     }
 
     // free device buffers
