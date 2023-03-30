@@ -97,6 +97,21 @@ ncclResult_t ixcclAllreduce(const void *sendbuff, void *recvbuff, size_t count,
     return ncclSuccess;
 }
 
+ncclResult_t ixcclMultiStreamAllreduce(const void *sendbuff, void *recvbuff, size_t count,
+                            ncclDataType_t dtype, ncclRedOp_t op, ncclComm_t comm,
+                            int nStream, cudaStream_t *streams)
+{
+
+    int countInAllr = count / nStream;
+
+    for(int i = 0; i < nStream; i++){
+        void *sendBase = GET_BASE(float, sendbuff, i, countInAllr);
+        NCCLCHECK(ncclAllReduce(sendbuff, recvbuff, countInAllr, dtype, op, comm, streams[i]));
+    }
+
+    return ncclSuccess;
+}
+
 /************************** USER COLLECTIVE FUNCTIONS **************************/
 
 ncclResult_t ixcclRing(const void *sendbuff, void *recvtemp, size_t count, int rank, int size,
