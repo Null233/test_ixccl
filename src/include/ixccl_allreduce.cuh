@@ -8,9 +8,9 @@
 #include "nccl.h"
 
 /* 1: IXCCL_ALLREDUCE; 2: ixcclRing; 3: ixcclButterfly; 4: ixcclTreeReduction; else: IXCCL_REDUCE */
-#define LOCAL_IXCCL_REDUCE_ALGO 4
+#define LOCAL_IXCCL_REDUCE_ALGO 0
 /* 1: ixcclBtreeBcast; 2: ixcclPipelineBtreeBcast; else IXCCL_BCAST */
-#define LOCAL_IXCCL_BCAST_ALGO 2
+#define LOCAL_IXCCL_BCAST_ALGO 0
 
 /************************** FUNCTION DECLARATIONS **************************/
 __global__ void sum(float *, float *, const int);
@@ -51,7 +51,7 @@ ncclResult_t ixcclHierarchical(void *, void *, size_t, ncclDataType_t, ncclRedOp
 #define IXCCL_PERF_COUNTER(cmd)                                                                    \
     do {                                                                                           \
         double begin, end;                                                                         \
-        for (int i = 0; i < RUN_ROUND; i++) {                                                      \
+        for (int run_i = 0; run_i < RUN_ROUND; run_i++) {                                          \
             begin = double(clock());                                                               \
             cmd;                                                                                   \
             CUDACHECK(cudaStreamSynchronize(s));                                                   \
@@ -168,6 +168,16 @@ ncclResult_t ixcclButterfly(const void *sendbuff, void *recvtemp, size_t count, 
     }
 
     return ncclSuccess;
+}
+
+ncclResult_t ixcclMultiStreamButterfly(const void *sendbuff, void *recvtemp, size_t count, int rank, int size,
+                            ncclDataType_t dtype, ncclComm_t comm, int nStream,
+                            cudaStream_t *stream)
+{
+    for (int i = 0; i < nStream; i++) {
+        void *sendBase = GET_BASE(float, sendbuff, i, count / nStream);
+        xcclButterfly(sendBase, recvtmp, count / nStream, rank, size, dtype, comm, streams[i]);
+    }
 }
 
 /**************** BTREE FUNCTIONS ****************/
@@ -298,8 +308,8 @@ ncclResult_t ixcclMultiStreamHier(void *sendbuff, void *tmp, size_t count, ncclD
 
     for (int i = 0; i < nStream; i++) {
         void *sendBase = GET_BASE(float, sendbuff, i, count / nStream);
-        ixcclHierarchical(sendBase, tmp, count / nStream, dtype, op, comm_local,
-                          comm_world_main, streams[i], COMM_LOCAL);
+        ixcclHierarchical(sendBase, tmp, count / nStream, dtype, op, comm_local, comm_world_main,
+                          streams[i], COMM_LOCAL);
     }
 
     return ncclSuccess;

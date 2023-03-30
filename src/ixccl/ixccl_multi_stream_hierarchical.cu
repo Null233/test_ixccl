@@ -59,7 +59,7 @@ int main(int argc, char *argv[])
 
     // initializing device buffer and stream
     CUDACHECK(cudaSetDevice(localRank));
-    int nStream = size;
+    int nStream = 16;
     cudaStream_t s[nStream];
     for (int i = 0; i < nStream; i++) {
         CUDACHECK(cudaStreamCreate(&s[i]));
