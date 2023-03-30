@@ -170,9 +170,9 @@ ncclResult_t ixcclButterfly(const void *sendbuff, void *recvtemp, size_t count, 
     return ncclSuccess;
 }
 
-ncclResult_t ixcclMultiStreamButterfly(const void *sendbuff, void *recvtemp, size_t count, int rank, int size,
-                            ncclDataType_t dtype, ncclComm_t comm, int nStream,
-                            cudaStream_t *stream)
+ncclResult_t ixcclMultiStreamButterfly(const void *sendbuff, void *recvtemp, size_t count, int rank,
+                                       int size, ncclDataType_t dtype, ncclComm_t comm, int nStream,
+                                       cudaStream_t *stream)
 {
     for (int i = 0; i < nStream; i++) {
         void *sendBase = GET_BASE(float, sendbuff, i, count / nStream);
