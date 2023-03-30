@@ -19,7 +19,7 @@ int main(int argc, char **argv)
         for (int j = 0; j < DATA_NUM; j++) {
             datas.push_back(vector<float>(data_sizes[size_i], rand()));
         }
-        PERF_COUNTER(mpiAllreduce(&datas[i % DATA_NUM][0], data_sizes[size_i], MPI_FLOAT, MPI_SUM,
+        PERF_COUNTER(mpiAllreduce(&datas[run_i % DATA_NUM][0], data_sizes[size_i], MPI_FLOAT, MPI_SUM,
                                   MPI_COMM_WORLD));
         if (rank == 0)
             printf("DATA SIZE: %-10d takes %.3lfms\n", data_sizes[size_i], avg  / CLOCKS_PER_SEC * 1000);

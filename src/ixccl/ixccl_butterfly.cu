@@ -40,7 +40,7 @@ int main(int argc, char *argv[])
 
         double avg = 0;
         IXCCL_PERF_COUNTER(NCCLCHECK(ixcclButterfly(
-            sendbuff[i % DATA_NUM], recvbuff, data_sizes[size_i], rank, size, ncclFloat, comm, s)));
+            sendbuff[run_i % DATA_NUM], recvbuff, data_sizes[size_i], rank, size, ncclFloat, comm, s)));
 
         PRINT(printf("DATA SIZE: %-10d takes %.3lfms\n", data_sizes[size_i], avg  / CLOCKS_PER_SEC * 1000));
     }

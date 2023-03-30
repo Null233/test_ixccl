@@ -99,7 +99,7 @@ int main(int argc, char *argv[])
 
         double avg = 0;
         IXCCL_PERF_COUNTER(NCCLCHECK(
-            ixcclHierarchical(sendbuff[i % DATA_NUM], recvbuff, data_sizes[size_i], ncclFloat,
+            ixcclHierarchical(sendbuff[run_i % DATA_NUM], recvbuff, data_sizes[size_i], ncclFloat,
                               ncclSum, comm_local, comm_world_main, s, COMM_LOCAL)));
 
         PRINT(printf("DATA SIZE: %-10d takes %.3lfms\n", data_sizes[size_i],

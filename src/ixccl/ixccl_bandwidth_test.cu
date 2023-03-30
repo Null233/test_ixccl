@@ -208,7 +208,7 @@ int main(int argc, char *argv[])
 
                     double avg = 0;
                     IXCCL_PERF_COUNTER(NCCLCHECK(
-                        ixcclAllreduce(sendbuff[i % DATA_NUM], recvbuff, data_sizes[size_i],
+                        ixcclAllreduce(sendbuff[run_i % DATA_NUM], recvbuff, data_sizes[size_i],
                                        ncclFloat, ncclSum, comms[node_i][node_j].nccl_comm, s[0])));
                     if (node_i == rank)
                         printf("Rank %d with %d:\n", node_i, node_j);

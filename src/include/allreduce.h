@@ -101,7 +101,7 @@ vector<int>
 #define PERF_COUNTER(cmd)                                                                          \
     do {                                                                                           \
         double begin, end;                                                                         \
-        for (int i = 0; i < RUN_ROUND; i++) {                                                      \
+        for (int run_i = 0; run_i < RUN_ROUND; run_i++) {                                                      \
             begin = double(clock());                                                               \
             cmd;                                                                                   \
             end = double(clock());                                                                 \

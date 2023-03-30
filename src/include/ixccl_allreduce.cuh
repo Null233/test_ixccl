@@ -12,6 +12,8 @@
 /* 1: ixcclBtreeBcast; 2: ixcclPipelineBtreeBcast; else IXCCL_BCAST */
 #define LOCAL_IXCCL_BCAST_ALGO 0
 
+#define nBlocks 1024
+
 /************************** FUNCTION DECLARATIONS **************************/
 __global__ void sum(float *, float *, const int);
 __global__ void assign(float *, float *, const int);
@@ -60,6 +62,8 @@ ncclResult_t ixcclHierarchical(void *, void *, size_t, ncclDataType_t, ncclRedOp
         }                                                                                          \
     } while (0)
 
+#define GRID(count, blocks) ((count + blocks - 1) / blocks)
+
 typedef struct MPINCCL_COMM_T {
     MPI_Comm mpi_comm;
     ncclUniqueId id;
@@ -95,7 +99,7 @@ ncclResult_t ixcclAllreduce(const void *sendbuff, void *recvbuff, size_t count,
 
 /************************** USER COLLECTIVE FUNCTIONS **************************/
 
-ncclResult_t ixcclRing(const void *sendbuff, void *recvtmp, size_t count, int rank, int size,
+ncclResult_t ixcclRing(const void *sendbuff, void *recvtemp, size_t count, int rank, int size,
                        ncclDataType_t dtype, ncclComm_t comm, cudaStream_t stream)
 {
 
@@ -110,12 +114,12 @@ ncclResult_t ixcclRing(const void *sendbuff, void *recvtmp, size_t count, int ra
 
         ncclGroupStart();
         NCCLCHECK(ncclSend(sendBase, count_in_ring, dtype, sendTo, comm, stream));
-        NCCLCHECK(ncclRecv(recvtmp, count_in_ring, dtype, recvFrom, comm, stream));
+        NCCLCHECK(ncclRecv(recvtemp, count_in_ring, dtype, recvFrom, comm, stream));
         ncclGroupEnd();
 
         // Sum
-        sum<<<(count_in_ring + 1023) / 1024, 1024, 0, stream>>>((float *)recvBase, (float *)recvtmp,
-                                                                count_in_ring);
+        sum<<<GRID(count_in_ring, nBlocks), nBlocks, 0, stream>>>((float *)recvBase, (float *)recvtemp,
+                                                            count_in_ring);
     }
 
     // All-Gather
@@ -125,25 +129,25 @@ ncclResult_t ixcclRing(const void *sendbuff, void *recvtmp, size_t count, int ra
 
         ncclGroupStart();
         NCCLCHECK(ncclSend(sendBase, count_in_ring, dtype, sendTo, comm, stream));
-        NCCLCHECK(ncclRecv(recvtmp, count_in_ring, dtype, recvFrom, comm, stream));
+        NCCLCHECK(ncclRecv(recvtemp, count_in_ring, dtype, recvFrom, comm, stream));
         ncclGroupEnd();
 
         // assign
-        assign<<<(count_in_ring + 1023) / 1024, 1024, 0, stream>>>((float *)recvBase,
-                                                                   (float *)recvtmp, count_in_ring);
+        assign<<<GRID(count_in_ring, nBlocks), nBlocks, 0, stream>>>((float *)recvBase, (float *)recvtemp,
+                                                               count_in_ring);
     }
 
     return ncclSuccess;
 }
 
-ncclResult_t ixcclMultiStreamRing(const void *sendbuff, void *recvtmp, size_t count, int rank,
+ncclResult_t ixcclMultiStreamRing(const void *sendbuff, void *recvtemp, size_t count, int rank,
                                   int size, ncclDataType_t dtype, ncclComm_t comm, int nStream,
                                   cudaStream_t *streams)
 {
 
     for (int i = 0; i < nStream; i++) {
         void *sendBase = GET_BASE(float, sendbuff, i, count / nStream);
-        ixcclRing(sendBase, recvtmp, count / nStream, rank, size, dtype, comm, streams[i]);
+        ixcclRing(sendBase, recvtemp, count / nStream, rank, size, dtype, comm, streams[i]);
     }
 
     return ncclSuccess;
@@ -163,7 +167,7 @@ ncclResult_t ixcclButterfly(const void *sendbuff, void *recvtemp, size_t count, 
         NCCLCHECK(ncclRecv(recvtemp, count, dtype, comm_node, comm, stream));
         ncclGroupEnd();
 
-        sum<<<(count + 1023) / 1024, 1024, 0, stream>>>((float *)sendbuff, (float *)recvtemp,
+        sum<<<GRID(count, nBlocks), nBlocks, 0, stream>>>((float *)sendbuff, (float *)recvtemp,
                                                         count);
     }
 
@@ -172,12 +176,14 @@ ncclResult_t ixcclButterfly(const void *sendbuff, void *recvtemp, size_t count, 
 
 ncclResult_t ixcclMultiStreamButterfly(const void *sendbuff, void *recvtemp, size_t count, int rank,
                                        int size, ncclDataType_t dtype, ncclComm_t comm, int nStream,
-                                       cudaStream_t *stream)
+                                       cudaStream_t *streams)
 {
     for (int i = 0; i < nStream; i++) {
         void *sendBase = GET_BASE(float, sendbuff, i, count / nStream);
-        xcclButterfly(sendBase, recvtmp, count / nStream, rank, size, dtype, comm, streams[i]);
+        ixcclButterfly(sendBase, recvtemp, count / nStream, rank, size, dtype, comm, streams[i]);
     }
+
+    return ncclSuccess;
 }
 
 /**************** BTREE FUNCTIONS ****************/
@@ -192,7 +198,7 @@ ncclResult_t ixcclBtreeBcast(const void *sendbuff, void *tmp, size_t count, int 
     ncclGroupStart();
     if (recvFrom >= 0) {
         NCCLCHECK(ncclRecv(tmp, count, dtype, recvFrom, comm, stream));
-        assign<<<(count + 1023) / 1024, 1024, 0, stream>>>(TO_ARRAY(sendbuff), TO_ARRAY(tmp),
+        assign<<<GRID(count, nBlocks), nBlocks, 0, stream>>>(TO_ARRAY(sendbuff), TO_ARRAY(tmp),
                                                            count);
     }
     if (sendToL >= 0) {
@@ -243,7 +249,7 @@ ncclResult_t ixcclTreeReduction(const void *sendbuff, void *tmp, size_t count, i
         ncclGroupStart();
         if (rank < commNode) {
             NCCLCHECK(ncclRecv(tmp, count, dtype, commNode, comm, stream));
-            sum<<<(count + 1023) / 1024, 1024, 0, stream>>>((float *)sendbuff, (float *)tmp, count);
+            sum<<<GRID(count, nBlocks), nBlocks, 0, stream>>>((float *)sendbuff, (float *)tmp, count);
         } else {
             NCCLCHECK(ncclSend(sendbuff, count, dtype, commNode, comm, stream));
         }

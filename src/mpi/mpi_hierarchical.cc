@@ -44,7 +44,7 @@ int main(int argc, char **argv)
         }
         float *tmp = (float *)malloc(data_sizes[size_i] * sizeof(float));
         double avg = 0;
-        PERF_COUNTER(mpiHierarchicalAllreduce(&datas[i % DATA_NUM][0], tmp, data_sizes[size_i],
+        PERF_COUNTER(mpiHierarchicalAllreduce(&datas[run_i % DATA_NUM][0], tmp, data_sizes[size_i],
                                               rank, size, MPI_FLOAT, MPI_SUM, COMM_LOCAL,
                                               COMM_WORLD_MAIN));
         if (rank == 0)

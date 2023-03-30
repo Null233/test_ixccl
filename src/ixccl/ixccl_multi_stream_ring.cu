@@ -42,9 +42,9 @@ int main(int argc, char *argv[])
         }
 
         double begin, end, avg = 0;
-        for (int i = 0; i < RUN_ROUND; i++) {
+        for (int run_i = 0; run_i < RUN_ROUND; run_i++) {
             begin = double(clock());
-            NCCLCHECK(ixcclMultiStreamRing(sendbuff[i % DATA_NUM], recvbuff, data_sizes[size_i],
+            NCCLCHECK(ixcclMultiStreamRing(sendbuff[run_i % DATA_NUM], recvbuff, data_sizes[size_i],
                                            rank, size, ncclFloat, comm, nStream, s));
             for (int s_i = 0; s_i < nStream; s_i++) {
                 CUDACHECK(cudaStreamSynchronize(s[s_i]));

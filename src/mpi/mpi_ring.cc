@@ -17,7 +17,7 @@ int main(int argc, char **argv)
         }
         float *tmp = (float *)malloc(data_sizes[size_i] * sizeof(float));
         double avg = 0;
-        PERF_COUNTER(mpiRing(&datas[i % DATA_NUM][0], tmp, data_sizes[size_i], rank, size,
+        PERF_COUNTER(mpiRing(&datas[run_i % DATA_NUM][0], tmp, data_sizes[size_i], rank, size,
                              MPI_FLOAT, MPI_COMM_WORLD));
         if (rank == 0)
             printf("DATA SIZE: %-10d takes %.3lfms\n", data_sizes[size_i], avg  / CLOCKS_PER_SEC * 1000);
