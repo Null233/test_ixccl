@@ -206,10 +206,29 @@ int main(int argc, char *argv[])
                                              data_sizes[size_i], cudaMemcpyHostToDevice));
                     }
 
-                    double avg = 0;
-                    IXCCL_PERF_COUNTER(NCCLCHECK(
-                        ixcclAllreduce(sendbuff[run_i % DATA_NUM], recvbuff, data_sizes[size_i],
-                                       ncclFloat, ncclSum, comms[node_i][node_j].nccl_comm, s[0])));
+                    double begin, end, avg = 0;
+                    for (int run_i = 0; run_i < RUN_ROUND; run_i++) {
+                        begin = double(clock());
+#ifdef APPLY_MULTIPLE_STREAM
+                        for (int s_i = 0; s_i < nStream; s_i++) {
+                            void *sendbase = GET_BASE(float, sendbuff[run_i % DATA_NUM], s_i,
+                                                      (data_sizes[size_i] / nStream));
+                            NCCLCHECK(ixcclAllreduce(sendbase, recvbuff, data_sizes[size_i],
+                                                     ncclFloat, ncclSum,
+                                                     comms[node_i][node_j].nccl_comm, s[i]));
+                        }
+#else
+                        NCCLCHECK(ixcclAllreduce(sendbuff[run_i % DATA_NUM], recvbuff,
+                                                 data_sizes[size_i], ncclFloat, ncclSum,
+                                                 comms[node_i][node_j].nccl_comm, s[0]));
+#endif
+                        for (int i = 0; i < nStream; i++) {
+                            CUDACHECK(cudaStreamSynchronize(s[i]));
+                        }
+                        end = double(clock());
+                        avg += (end - begin) / RUN_ROUND;
+                    }
+
                     if (node_i == rank)
                         printf("Rank %d with %d:\n", node_i, node_j);
                     if (node_i == rank)

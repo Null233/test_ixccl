@@ -21,11 +21,11 @@ HOST	:= localhost:$(NPLOCAL),$(PEER1):$(NPLOCAL),$(PEER2):$(NPLOCAL)
 endif
 CUHOST	:= localhost:$(CUNPLOCAL),$(PEER1):$(CUNPLOCAL)
 
-
+DEFLAGS		:= -DBROADCAST_FROM_0 -DTEST_AR -DTEST_SR
 CXXFLAGS	:= -O3 -Isrc/include -Wno-format
-CUFLAGS		:= -O3 -Isrc/include -Wno-format -DTEST_SR -DBROADCAST_FROM_0 
+CUFLAGS		:= $(CXXFLAGS) -DTEST_SR -DBROADCAST_FROM_0 
 LDFLAGS		:= -lmpi -L/usr/local/lib
-CULDFLAGS	:= -L/usr/local/lib -lmpi -lcuda -lcudart -lnccl
+CULDFLAGS	:= $(LDFLAGS) -lcuda -lcudart -lnccl
 
 PWD			:= $(shell pwd)
 BUILDDIR	:= $(abspath build)
@@ -54,7 +54,7 @@ $(BUILDDIR)/ccobj/%.o: src/mpi/%.cc $(BUILDDIR)
 	$(CXX) -c $(CXXFLAGS) $< -o $@
 
 $(BUILDDIR)/cuobj/%.o: src/ixccl/%.cu $(BUILDDIR)
-	$(NVCC) -c $(CUFLAGS) $< -o $@
+	$(NVCC) -c $(CUFLAGS) $(DEFLAGS) $< -o $@
 
 $(BUILDDIR):
 	@mkdir -p $(BUILDDIR)
