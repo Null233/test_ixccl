@@ -1,5 +1,35 @@
 #include "ixccl_allreduce.cuh"
 
+int ConstructComms(int rank, int size, int localRank, int localSize, ncclComm_t *comms)
+{
+
+    int scale = localSize;
+    ncclUniqueId ids[scale];
+    MPI_Comm mpi_comms[scale];
+    // Uniformly getting ncclUniqueId from rank 0 and broadcasting to all
+    if (rank == 0) {
+        for (int i = 0; i < scale; i++) {
+            ncclGetUniqueId(&ids[i]);
+        }
+    }
+    MPICHECK(MPI_Bcast((void *)&ids[0], scale * sizeof(ncclUniqueId), MPI_BYTE, 0, MPI_COMM_WORLD));
+
+    for (int i = 0; i < scale; i++) {
+        int color = localRank == i ? i : MPI_UNDEFINED;
+        MPI_Comm_split(MPI_COMM_WORLD, color, rank, &mpi_comms[i]);
+    }
+    for (int i = 0; i < scale; i++) {
+        if (localRank == i) {
+            int world_leader_size, world_leader_rank;
+            MPI_Comm_size(mpi_comms[i], &world_leader_size);
+            MPI_Comm_rank(mpi_comms[i], &world_leader_rank);
+            NCCLCHECK(ncclCommInitRank(&comms[i], world_leader_size, ids[i], world_leader_rank));
+        }
+    }
+
+    return MPI_SUCCESS;
+}
+
 int main(int argc, char *argv[])
 {
     int rank, size, localRank;
@@ -19,7 +49,7 @@ int main(int argc, char *argv[])
     MPI_Comm COMM_LOCAL;
     MPI_Comm COMM_WORLD_MAIN;
     split_world(rank, localRank, &COMM_LOCAL, &COMM_WORLD_MAIN);
-    int localSize = -1, mlocalRank = -1;
+    int localSize, mlocalRank;
     int worldMainSize, worldMainRank;
     MPICHECK(MPI_Comm_rank(COMM_LOCAL, &mlocalRank));
     MPICHECK(MPI_Comm_size(COMM_LOCAL, &localSize));
@@ -28,64 +58,40 @@ int main(int argc, char *argv[])
     /**
      * COMM_WORLD_MAIN as a inter-node communicator is only used if localRank == 0
      */
-    if (localRank == LOCAL_HIER_ROOT) {
+    if (localRank == 0)
         MPICHECK(MPI_Comm_rank(COMM_WORLD_MAIN, &worldMainRank));
+    if (localRank == 0)
         MPICHECK(MPI_Comm_size(COMM_WORLD_MAIN, &worldMainSize));
-    }
     if (rank == 0)
-        printf("IXCCL_HIERARCHICAL\n");
-
-    if (rank == 0) {
-#if LOCAL_IXCCL_REDUCE_ALGO == 1
-        printf("LOCAL_IXCCL_ALLREDUCE\n");
-#elif LOCAL_IXCCL_REDUCE_ALGO == 2
-        printf("LOCAL_IXCCL_RING\n");
-#elif LOCAL_IXCCL_REDUCE_ALGO == 3
-        printf("LOCAL_IXCCL_BUTTERFLY\n");
-#elif LOCAL_IXCCL_REDUCE_ALGO == 4
-        printf("LOCAL_IXCCL_TREE_REDUCTION\n");
-#else
-        printf("LOCAL_IXCCL_REDUCE\n");
-#endif
-
-#if LOCAL_IXCCL_BCAST_ALGO == 1
-        printf("LOCAL_IXCCL_BTREE_BROADCAST\n");
-#elif LOCAL_IXCCL_BCAST_ALGO == 2
-        printf("LOCAL_IXCCL_PIPELINE_BTREE_BROADCAST\n");
-#else
-        printf("LOCAL_IXCCL_BROADCAST\n");
-#endif
-    }
+        printf("IXCCL_PIPELINE_HIERARCHICAL\n");
 
     // initializing device buffer and stream
     CUDACHECK(cudaSetDevice(localRank));
-    cudaStream_t s;
+    int nStream = localSize;
+    cudaStream_t s[nStream];
+    for (int i = 0; i < nStream; i++) {
+        CUDACHECK(cudaStreamCreate(&s[i]));
+    }
     float **sendbuff, *recvbuff;
-    CUDACHECK(cudaStreamCreate(&s));
     sendbuff = (float **)malloc(DATA_NUM * sizeof(float *));
 
-    // get NCCL unique ID at rank 0 and broadcast it to all others
-    ncclUniqueId id_local, id_main;
     /**
-     * allocate unique id if localRank == 0 and be broadcasted to all local ranks
-     * every node has a duplicate nccl communicator comm_local
-     * only main local ranks (localRank = 0) have comm_world_main
+     * We need localSize + 1 ids
+     * including local communicator, and communicators for each rank locally
+     * ids[0] is the id for local communicator
      */
-    if (localRank == LOCAL_HIER_ROOT)
-        ncclGetUniqueId(&id_local);
-    MPICHECK(MPI_Bcast((void *)&id_local, sizeof(id_local), MPI_BYTE, LOCAL_HIER_ROOT, COMM_LOCAL));
-    if (worldMainRank == 0)
-        ncclGetUniqueId(&id_main);
-    if (localRank == LOCAL_HIER_ROOT)
-        MPICHECK(MPI_Bcast((void *)&id_main, sizeof(id_main), MPI_BYTE, 0, COMM_WORLD_MAIN));
 
     // initializing NCCL
-    ncclComm_t comm_local, comm_world_main;
+    ncclUniqueId id_local;
+    ncclComm_t comm_local;
+    if (localRank == 0)
+        ncclGetUniqueId(&id_local);
+    MPICHECK(MPI_Bcast((void *)&id_local, sizeof(id_local), MPI_BYTE, 0, COMM_LOCAL));
     NCCLCHECK(ncclCommInitRank(&comm_local, localSize, id_local, localRank));
-    if (localRank == LOCAL_HIER_ROOT)
-        NCCLCHECK(ncclCommInitRank(&comm_world_main, worldMainSize, id_main, worldMainRank));
+    ncclComm_t comms[localSize];
+    ConstructComms(rank, size, localRank, localSize, comms);
     if (rank == 0)
-        printf("Finish initializing NCCL\n");
+        printf("FINISH INITIALIZING NCCL\n");
 
     // starting performance counter
     for (int size_i = 0; size_i < data_sizes.size(); size_i++) {
@@ -97,10 +103,17 @@ int main(int argc, char *argv[])
                                  data_sizes[size_i], cudaMemcpyHostToDevice));
         }
 
-        double avg = 0;
-        IXCCL_PERF_COUNTER(NCCLCHECK(
-            ixcclHierarchical(sendbuff[run_i % DATA_NUM], recvbuff, data_sizes[size_i], ncclFloat,
-                              ncclSum, comm_local, comm_world_main, s, COMM_LOCAL)));
+        double start, end, avg = 0;
+        for (int run = 0; run < RUN_ROUND; run++) {
+            start = double(clock());
+            ixcclPipelineHier(sendbuff[run % DATA_NUM], recvbuff, data_sizes[size_i], ncclFloat,
+                              ncclSum, comm_local, comms, COMM_LOCAL, nStream, s);
+            for (int i = 0; i < nStream; i++) {
+                CUDACHECK(cudaStreamSynchronize(s[i]));
+            }
+            end = double(clock());
+            avg += (end - start) / RUN_ROUND;
+        }
 
         PRINT(printf("DATA SIZE: %-10d takes %.3lfms\n", data_sizes[size_i],
                      double(avg) / CLOCKS_PER_SEC * 1000));
@@ -118,8 +131,11 @@ int main(int argc, char *argv[])
 
     // finalizing NCCL
     ncclCommDestroy(comm_local);
-    if (localRank == 0)
-        ncclCommDestroy(comm_world_main);
+    for (int i = 0; i < localSize; i++) {
+        if (localRank == i) {
+            ncclCommDestroy(comms[i]);
+        }
+    }
 
     // finalizing MPI
     MPICHECK(MPI_Finalize());

@@ -1,7 +1,6 @@
 #ifndef ALLREDUCE_H
 #define ALLREDUCE_H
 
-#include <chrono>
 #include <cmath>
 #include <ctime>
 #include <mpi.h>
@@ -18,6 +17,7 @@
 /* 1: mpiBtreeBcast; 2: mpiPipelineBtreeBcast; else MPI_BCAST */
 #define LOCAL_BCAST_ALGO 0
 #define DATA_NUM 5
+#define LOCAL_HIER_ROOT 1
 
 using namespace std;
 
@@ -235,7 +235,7 @@ void split_world(int rank, int localrank, MPI_Comm *local, MPI_Comm *world_main)
 {
 
     int local_color = rank - localrank;
-    int world_color = localrank == 0 ? 1 : MPI_UNDEFINED;
+    int world_color = localrank == LOCAL_HIER_ROOT ? 1 : MPI_UNDEFINED;
 
     MPI_Comm_split(MPI_COMM_WORLD, local_color, rank, local);
     MPI_Comm_split(MPI_COMM_WORLD, world_color, rank, world_main);

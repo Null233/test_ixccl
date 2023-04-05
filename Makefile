@@ -21,7 +21,7 @@ HOST	:= localhost:$(NPLOCAL),$(PEER1):$(NPLOCAL),$(PEER2):$(NPLOCAL)
 endif
 CUHOST	:= localhost:$(CUNPLOCAL),$(PEER1):$(CUNPLOCAL)
 
-DEFLAGS		:= -DBROADCAST_FROM_0 -DTEST_AR -DTEST_SR
+DEFLAGS		:= -DBROADCAST_FROM_0 -DTEST_AR
 CXXFLAGS	:= -O3 -Isrc/include -Wno-format
 CUFLAGS		:= $(CXXFLAGS)
 LDFLAGS		:= -lmpi -L/usr/local/lib
@@ -34,7 +34,7 @@ SRC		:= src/mpi/mpi_ring.cc src/mpi/mpi_butterfly.cc src/mpi/mpi_allreduce.cc sr
 SRC		+= src/mpi/mpi_tree_reduction.cc
 CUSRC	:= src/ixccl/ixccl_ring.cu src/ixccl/ixccl_allreduce.cu src/ixccl/ixccl_butterfly.cu src/ixccl/ixccl_hierarchical.cu
 CUSRC	+= src/ixccl/ixccl_bandwidth_test.cu src/ixccl/ixccl_multi_stream_ring.cu src/ixccl/ixccl_multi_stream_hierarchical.cu
-CUSRC	+= src/ixccl/ixccl_multi_stream_allreduce.cu
+CUSRC	+= src/ixccl/ixccl_multi_stream_allreduce.cu src/ixccl/ixccl_pipeline_hierarchical.cu
 OBJ		:= $(patsubst src/mpi/%.cc, $(BUILDDIR)/ccobj/%.o, $(SRC))
 CUOBJ	:= $(patsubst src/ixccl/%.cu, $(BUILDDIR)/cuobj/%.o, $(CUSRC))
 OUT		:= $(patsubst $(BUILDDIR)/ccobj/%.o, $(BUILDDIR)/%.out, $(OBJ))

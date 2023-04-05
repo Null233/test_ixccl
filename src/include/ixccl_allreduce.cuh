@@ -8,9 +8,9 @@
 #include "nccl.h"
 
 /* 1: IXCCL_ALLREDUCE; 2: ixcclRing; 3: ixcclButterfly; 4: ixcclTreeReduction; else: IXCCL_REDUCE */
-#define LOCAL_IXCCL_REDUCE_ALGO 0
+#define LOCAL_IXCCL_REDUCE_ALGO 2
 /* 1: ixcclBtreeBcast; 2: ixcclPipelineBtreeBcast; else IXCCL_BCAST */
-#define LOCAL_IXCCL_BCAST_ALGO 0
+#define LOCAL_IXCCL_BCAST_ALGO 2
 
 #define nBlocks 1024
 
@@ -98,13 +98,13 @@ ncclResult_t ixcclAllreduce(const void *sendbuff, void *recvbuff, size_t count,
 }
 
 ncclResult_t ixcclMultiStreamAllreduce(const void *sendbuff, void *recvbuff, size_t count,
-                            ncclDataType_t dtype, ncclRedOp_t op, ncclComm_t comm,
-                            int nStream, cudaStream_t *streams)
+                                       ncclDataType_t dtype, ncclRedOp_t op, ncclComm_t comm,
+                                       int nStream, cudaStream_t *streams)
 {
 
     int countInAllr = count / nStream;
 
-    for(int i = 0; i < nStream; i++){
+    for (int i = 0; i < nStream; i++) {
         void *sendBase = GET_BASE(float, sendbuff, i, countInAllr);
         NCCLCHECK(ncclAllReduce(sendbuff, recvbuff, countInAllr, dtype, op, comm, streams[i]));
     }
@@ -133,8 +133,8 @@ ncclResult_t ixcclRing(const void *sendbuff, void *recvtemp, size_t count, int r
         ncclGroupEnd();
 
         // Sum
-        sum<<<GRID(count_in_ring, nBlocks), nBlocks, 0, stream>>>((float *)recvBase, (float *)recvtemp,
-                                                            count_in_ring);
+        sum<<<GRID(count_in_ring, nBlocks), nBlocks, 0, stream>>>((float *)recvBase,
+                                                                  (float *)recvtemp, count_in_ring);
     }
 
     // All-Gather
@@ -148,8 +148,8 @@ ncclResult_t ixcclRing(const void *sendbuff, void *recvtemp, size_t count, int r
         ncclGroupEnd();
 
         // assign
-        assign<<<GRID(count_in_ring, nBlocks), nBlocks, 0, stream>>>((float *)recvBase, (float *)recvtemp,
-                                                               count_in_ring);
+        assign<<<GRID(count_in_ring, nBlocks), nBlocks, 0, stream>>>(
+            (float *)recvBase, (float *)recvtemp, count_in_ring);
     }
 
     return ncclSuccess;
@@ -183,7 +183,7 @@ ncclResult_t ixcclButterfly(const void *sendbuff, void *recvtemp, size_t count, 
         ncclGroupEnd();
 
         sum<<<GRID(count, nBlocks), nBlocks, 0, stream>>>((float *)sendbuff, (float *)recvtemp,
-                                                        count);
+                                                          count);
     }
 
     return ncclSuccess;
@@ -214,7 +214,7 @@ ncclResult_t ixcclBtreeBcast(const void *sendbuff, void *tmp, size_t count, int 
     if (recvFrom >= 0) {
         NCCLCHECK(ncclRecv(tmp, count, dtype, recvFrom, comm, stream));
         assign<<<GRID(count, nBlocks), nBlocks, 0, stream>>>(TO_ARRAY(sendbuff), TO_ARRAY(tmp),
-                                                           count);
+                                                             count);
     }
     if (sendToL >= 0) {
         NCCLCHECK(ncclSend(sendbuff, count, dtype, sendToL, comm, stream));
@@ -264,7 +264,8 @@ ncclResult_t ixcclTreeReduction(const void *sendbuff, void *tmp, size_t count, i
         ncclGroupStart();
         if (rank < commNode) {
             NCCLCHECK(ncclRecv(tmp, count, dtype, commNode, comm, stream));
-            sum<<<GRID(count, nBlocks), nBlocks, 0, stream>>>((float *)sendbuff, (float *)tmp, count);
+            sum<<<GRID(count, nBlocks), nBlocks, 0, stream>>>((float *)sendbuff, (float *)tmp,
+                                                              count);
         } else {
             NCCLCHECK(ncclSend(sendbuff, count, dtype, commNode, comm, stream));
         }
@@ -300,11 +301,11 @@ ncclResult_t ixcclHierarchical(void *sendbuff, void *tmp, size_t count, ncclData
         ixcclTreeReduction(sendbuff, tmp, count, localRank, localSize, dtype, comm_local, stream));
 #else
     /* Local NCCL Reduce */
-    NCCLCHECK(ncclReduce(sendbuff, sendbuff, count, dtype, op, 0, comm_local, stream));
+    NCCLCHECK(ncclReduce(sendbuff, sendbuff, count, dtype, op, LOCAL_HIER_ROOT, comm_local, stream));
 #endif
 
     /* World Main NCCL Allreduce */
-    if (localRank == 0)
+    if (localRank == LOCAL_HIER_ROOT)
         NCCLCHECK(ncclAllReduce(sendbuff, sendbuff, count, dtype, op, comm_world_main, stream));
 
 #if LOCAL_IXCCL_BCAST_ALGO == 1
@@ -317,7 +318,7 @@ ncclResult_t ixcclHierarchical(void *sendbuff, void *tmp, size_t count, ncclData
                                       stream));
 #else
     /* Local Broadcast */
-    NCCLCHECK(ncclBroadcast(sendbuff, sendbuff, count, dtype, 0, comm_local, stream));
+    NCCLCHECK(ncclBroadcast(sendbuff, sendbuff, count, dtype, LOCAL_HIER_ROOT, comm_local, stream));
 #endif
     return ncclSuccess;
 }
@@ -331,6 +332,36 @@ ncclResult_t ixcclMultiStreamHier(void *sendbuff, void *tmp, size_t count, ncclD
         void *sendBase = GET_BASE(float, sendbuff, i, count / nStream);
         ixcclHierarchical(sendBase, tmp, count / nStream, dtype, op, comm_local, comm_world_main,
                           streams[i], COMM_LOCAL);
+    }
+
+    return ncclSuccess;
+}
+
+ncclResult_t ixcclPipelineHier(void *sendbuff, void *tmp, size_t count, ncclDataType_t dtype,
+                               ncclRedOp_t op, ncclComm_t comm_local, ncclComm_t *comms,
+                               MPI_Comm COMM_LOCAL, int nStream, cudaStream_t *streams)
+{
+    int localRank, localSize;
+    MPI_Comm_rank(COMM_LOCAL, &localRank);
+    MPI_Comm_size(COMM_LOCAL, &localSize);
+
+    int countInHier = count / nStream;
+
+    for (int i = 0; i < nStream; i++) {
+        void *sendBase = GET_BASE(float, sendbuff, i, countInHier);
+        NCCLCHECK(
+            ncclReduce(sendBase, sendBase, countInHier, dtype, op, i, comm_local, streams[i]));
+    }
+    for (int i = 0; i < nStream; i++) {
+        if (localRank == i) {
+            void *sendBase = GET_BASE(float, sendbuff, i, countInHier);
+            NCCLCHECK(
+                ncclAllReduce(sendBase, sendBase, countInHier, dtype, op, comms[i], streams[i]));
+        }
+    }
+    for (int i = 0; i < nStream; i++) {
+        void *sendBase = GET_BASE(float, sendbuff, i, countInHier);
+        NCCLCHECK(ncclBroadcast(sendBase, sendBase, countInHier, dtype, i, comm_local, streams[i]));
     }
 
     return ncclSuccess;
